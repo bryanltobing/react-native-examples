@@ -1,10 +1,10 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+/* eslint-disable react-native/no-inline-styles */
+import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
   Image,
   Platform,
-  ScrollView,
+  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,7 +17,6 @@ import {
   Camera,
   sortFormats,
   type CameraDeviceFormat,
-  useCameraFormat,
 } from 'react-native-vision-camera';
 import {reduceRatio} from './src/helpers';
 import {manipulateAsync, type ActionCrop} from 'expo-image-manipulator';
@@ -29,22 +28,12 @@ export default function App() {
   const devices = useCameraDevices();
   const device = devices.back;
   const cameraRef = useRef<Camera | null>(null);
-  const boundingBoxRef = useRef<View | null>(null);
 
   const [cropData, setCropData] = useState<ActionCrop['crop']>();
 
-  const {width, height} = useWindowDimensions();
-
-  // alert(JSON.stringify({width: Dimensions.get('window').width, height: Dimensions.get("window").height}, null, 2));
+  const {width: windowDimensionsWidth} = useWindowDimensions();
 
   const [imageUri, setImageUri] = useState('');
-  // useEffect(() => {
-  //   if (imageUri) {
-  //     Image.getSize(imageUri, (width, height) => {
-  //       alert(JSON.stringify({width, height}, null, 2));
-  //     });
-  //   }
-  // }, [imageUri]);
 
   const availableRatios = useMemo(
     () =>
@@ -63,40 +52,34 @@ export default function App() {
     [device?.formats],
   );
 
-  const cameraFormat = useCameraFormat(device);
-
   const format = useMemo(
-    () => availableRatios?.['4:3']?.[0],
+    () => availableRatios?.['16:9']?.[0],
     [availableRatios],
   );
 
   const handleTakePhoto = useCallback(async () => {
     const photo = await cameraRef.current?.takePhoto({skipMetadata: false});
 
-    if (!photo) return;
+    if (!photo) {
+      return;
+    }
     const photoTakenUri = 'file://' + photo.path;
 
-    // hack on ios for flipped width and height
+    // Hack on ios where width and height are flipped
     const photoCapturedWidth =
       photo.width > photo.height ? photo.height : photo.width;
     const photoCapturedHeight =
       photo.width > photo.height ? photo.width : photo.height;
 
     setImageUri(photoTakenUri);
-    // alert(
-    //   JSON.stringify(
-    //     {WIDTH: photoCapturedWidth, height: photoCapturedHeight},
-    //     null,
-    //     2,
-    //   ),
-    // );
 
     if (!cropData) {
       return;
     }
 
-    const scaleWidth = photoCapturedWidth / width;
-    const scaleHeight = photoCapturedHeight / (width * (4 / 3));
+    const scaleWidth = photoCapturedWidth / windowDimensionsWidth;
+    const scaleHeight =
+      photoCapturedHeight / (windowDimensionsWidth * (16 / 9));
 
     const manipulated = await manipulateAsync(photoTakenUri, [
       {
@@ -110,7 +93,7 @@ export default function App() {
     ]);
 
     setImageUri(manipulated.uri);
-  }, [cropData, width]);
+  }, [cropData, windowDimensionsWidth]);
 
   if (imageUri) {
     return (
@@ -133,79 +116,97 @@ export default function App() {
   }
 
   return (
-    <View style={styles.container}>
-      <Camera
-        style={[StyleSheet.absoluteFill, {width, height: width * (4 / 3)}]}
-        device={device}
-        isActive={true}
-        ref={cameraRef}
-        photo
-        zoom={device.neutralZoom}
-        format={{
-          ...format,
-          // hack on android
-          ...Platform.select({
-            android: {
-              photoWidth: format.photoHeight,
-              photoHeight: format.photoWidth,
+    <SafeAreaView style={{flex: 1}}>
+      <View style={styles.container}>
+        <View style={StyleSheet.absoluteFill}>
+          <Text style={{marginLeft: 'auto'}}>Close</Text>
+        </View>
+        <View
+          style={[
+            styles.cameraContainer,
+            {
+              width: windowDimensionsWidth,
+              height: windowDimensionsWidth * (16 / 9),
             },
-            // ios: {
-            //   photoWidth: format.photoHeight,
-            //   photoHeight: format.photoWidth,
-            // },
-          }),
-        }}
-      />
-      <View style={[StyleSheet.absoluteFill]}>
-        <View style={styles.controlContainer}>
-          <View
-            style={styles.boundingBox}
-            ref={boundingBoxRef}
-            onLayout={() => {
-              boundingBoxRef.current?.measure(
-                (x, y, width, height, pageX, pageY) => {
-                  setCropData({height, width, originX: pageX, originY: pageY});
+          ]}>
+          <Camera
+            device={device}
+            isActive
+            style={StyleSheet.absoluteFill}
+            orientation="portrait"
+            photo
+            ref={cameraRef}
+            zoom={device.neutralZoom}
+            format={{
+              ...format,
+              // hack on android
+              ...Platform.select({
+                android: {
+                  photoWidth: format.photoHeight,
+                  photoHeight: format.photoWidth,
                 },
-              );
+              }),
             }}
           />
-          {/* <ScrollView>
-            <Text style={{color: 'white'}}>
-              {JSON.stringify(format, null, 2)}
-            </Text>
-          </ScrollView> */}
 
-          <TouchableOpacity
-            style={styles.captureButton}
-            onPress={handleTakePhoto}>
-            <Text style={{color: 'white'}}>Capture</Text>
-          </TouchableOpacity>
+          <View style={[StyleSheet.absoluteFill, styles.controlContainer]}>
+            <View
+              style={styles.boundingBox}
+              onLayout={({nativeEvent: {layout}}) => {
+                alert(JSON.stringify(layout, null, 2));
+                setCropData({
+                  width: layout.width,
+                  height: layout.height,
+                  originX: layout.x,
+                  originY: layout.y,
+                });
+              }}
+            />
+
+            <Text style={{textAlign: 'center', color: '#ffffff'}}>
+              Pastikan KTP kamu ada di dalam area kotak
+            </Text>
+
+            <TouchableOpacity
+              style={styles.captureButton}
+              onPress={handleTakePhoto}
+            />
+          </View>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'black',
+  },
+  cameraContainer: {
     position: 'relative',
   },
   controlContainer: {
-    // flex: 1,
+    flex: 1,
     justifyContent: 'space-between',
+    paddingTop: 120,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   boundingBox: {
-    // width: KTP_WIDTH,
-    // height: KTP_HEIGHT,
     aspectRatio: KTP_WIDTH / KTP_HEIGHT,
     borderColor: 'white',
     borderWidth: 2,
-    marginHorizontal: 16,
   },
   captureButton: {
-    padding: 16,
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    width: 60,
+    height: 60,
+    backgroundColor: 'red',
+    borderColor: 'white',
+    borderWidth: 2,
+    borderRadius: 30,
+    marginLeft: 'auto',
+    marginRight: 'auto',
   },
 });
