@@ -1,118 +1,195 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+/* eslint-disable react-native/no-inline-styles */
+import * as React from 'react';
+import {Dimensions, ScaledSize, View} from 'react-native';
+import Animated, {
+  Extrapolate,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
+import Carousel from 'react-native-reanimated-carousel';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import {SBItem} from './components/SBItem';
+import SButton from './components/SButton';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+export const ElementsText = {
+  AUTOPLAY: 'AutoPlay',
+};
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+export const window: ScaledSize = Dimensions.get('window');
 
-function Section({children, title}: SectionProps): JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+const PAGE_WIDTH = window.width;
+const colors = [
+  '#26292E',
+  '#899F9C',
+  '#B3C680',
+  '#5C6265',
+  '#F5D399',
+  '#F1F1F1',
+];
+
+function Index() {
+  const [isVertical, setIsVertical] = React.useState(false);
+  const [autoPlay, setAutoPlay] = React.useState(false);
+  const [pagingEnabled, setPagingEnabled] = React.useState<boolean>(true);
+  const [snapEnabled, setSnapEnabled] = React.useState<boolean>(true);
+  const progressValue = useSharedValue<number>(0);
+  const baseOptions = isVertical
+    ? ({
+        vertical: true,
+        width: PAGE_WIDTH * 0.86,
+        height: PAGE_WIDTH * 0.6,
+      } as const)
+    : ({
+        vertical: false,
+        width: PAGE_WIDTH,
+        height: PAGE_WIDTH * 0.6,
+      } as const);
+
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
+    <View
+      style={{
+        alignItems: 'center',
+      }}>
+      <Carousel
+        {...baseOptions}
+        style={{
+          width: PAGE_WIDTH * 0.86,
+        }}
+        loop
+        pagingEnabled={pagingEnabled}
+        snapEnabled={snapEnabled}
+        autoPlay={autoPlay}
+        autoPlayInterval={1500}
+        onProgressChange={(_, absoluteProgress) =>
+          (progressValue.value = absoluteProgress)
+        }
+        mode="parallax"
+        modeConfig={{
+          parallaxScrollingScale: 0.9,
+          parallaxScrollingOffset: 50,
+        }}
+        data={colors}
+        renderItem={({index}) => <SBItem index={index} />}
+      />
+      {!!progressValue && (
+        <View
+          style={
+            isVertical
+              ? {
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  width: 10,
+                  alignSelf: 'center',
+                  position: 'absolute',
+                  right: 5,
+                  top: 40,
+                }
+              : {
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  width: 100,
+                  alignSelf: 'center',
+                }
+          }>
+          {colors.map((backgroundColor, index) => {
+            return (
+              <PaginationItem
+                backgroundColor={backgroundColor}
+                animValue={progressValue}
+                index={index}
+                key={index}
+                isRotate={isVertical}
+                length={colors.length}
+              />
+            );
+          })}
+        </View>
+      )}
+      <SButton
+        onPress={() =>
+          setAutoPlay(!autoPlay)
+        }>{`${ElementsText.AUTOPLAY}:${autoPlay}`}</SButton>
+      <SButton
+        onPress={() => {
+          setIsVertical(!isVertical);
+        }}>
+        {isVertical ? 'Set horizontal' : 'Set Vertical'}
+      </SButton>
+      <SButton
+        onPress={() => {
+          setPagingEnabled(!pagingEnabled);
+        }}>
+        {`pagingEnabled:${pagingEnabled}`}
+      </SButton>
+      <SButton
+        onPress={() => {
+          setSnapEnabled(!snapEnabled);
+        }}>
+        {`snapEnabled:${snapEnabled}`}
+      </SButton>
     </View>
   );
 }
 
-function App(): JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+const PaginationItem: React.FC<{
+  index: number;
+  backgroundColor: string;
+  length: number;
+  animValue: Animated.SharedValue<number>;
+  isRotate?: boolean;
+}> = props => {
+  const {animValue, index, length, backgroundColor, isRotate} = props;
+  const width = 10;
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+  const animStyle = useAnimatedStyle(() => {
+    let inputRange = [index - 1, index, index + 1];
+    let outputRange = [-width, 0, width];
 
+    if (index === 0 && animValue?.value > length - 1) {
+      inputRange = [length - 1, length, length + 1];
+      outputRange = [-width, 0, width];
+    }
+
+    return {
+      transform: [
+        {
+          translateX: interpolate(
+            animValue?.value,
+            inputRange,
+            outputRange,
+            Extrapolate.CLAMP,
+          ),
+        },
+      ],
+    };
+  }, [animValue, index, length]);
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <View
+      style={{
+        backgroundColor: 'white',
+        width,
+        height: width,
+        borderRadius: 50,
+        overflow: 'hidden',
+        transform: [
+          {
+            rotateZ: isRotate ? '90deg' : '0deg',
+          },
+        ],
+      }}>
+      <Animated.View
+        style={[
+          {
+            borderRadius: 50,
+            backgroundColor,
+            flex: 1,
+          },
+          animStyle,
+        ]}
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+    </View>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
-
-export default App;
+export default Index;
